@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<link rel="manifest" href="manifest.json">
+<title>Мой плеер</title>
+<style>
+:root{--bg:#111418;--card:#1b2027;--line:#2a313b;--txt:#e8ecf1;--dim:#8b95a3;--acc:#4ade80}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:15px system-ui,sans-serif;padding-bottom:150px}
+header{position:sticky;top:0;background:var(--bg);z-index:5;border-bottom:1px solid var(--line)}
+nav{display:flex;overflow-x:auto}
+nav button{flex:1;padding:14px 10px;background:none;border:0;color:var(--dim);font-size:14px;white-space:nowrap;border-bottom:2px solid transparent}
+nav button.on{color:var(--acc);border-color:var(--acc)}
+main{padding:14px;max-width:720px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+button.b,label.b{display:inline-block;background:var(--acc);color:#07220f;border:0;border-radius:10px;padding:10px 14px;font-weight:600;font-size:14px;cursor:pointer}
+button.g{background:none;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:8px 12px;font-size:13px;cursor:pointer}
+input[type=text],input[type=search],textarea{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:10px;font-size:15px}
+.row{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line)}
+.row:last-child{border:0}
+.row .t{flex:1;min-width:0;cursor:pointer}
+.row .t b,.row .t span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .t span{color:var(--dim);font-size:13px}
+.row.cur .t b{color:var(--acc)}
+.dim{color:var(--dim);font-size:13px}
+.hide{display:none}
+#player{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom))}
+#player .now{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#player input[type=range]{width:100%}
+.ctrl{display:flex;justify-content:center;gap:10px;margin-top:6px}
+.ctrl button{width:46px;height:42px;background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:10px;font-size:18px}
+.ctrl button.on{color:var(--acc);border-color:var(--acc)}
+.ok{color:var(--acc)}.bad{color:#f87171}
+</style>
+</head>
+<body>
+<header>
+<nav id="nav">
+<button data-tab="lib" class="on">Библиотека</button>
+<button data-tab="pl">Плейлисты</button>
+<button data-tab="imp">Импорт</button>
+<button data-tab="jam">Jamendo</button>
+<button data-tab="set">Настройки</button>
+</nav>
+</header>
+
+<main>
+<section id="lib">
+<div class="card">
+<label class="b">+ Добавить файлы<input id="addFiles" type="file" accept="audio/*" multiple hidden></label>
+<span class="dim" id="storage"></span>
+</div>
+<input type="search" id="q" placeholder="Поиск по библиотеке">
+<div class="card" id="libList" style="margin-top:12px"></div>
+</section>
+
+<section id="pl" class="hide">
+<div class="card">
+<input type="text" id="plName" placeholder="Название нового плейлиста">
+<div style="margin-top:8px"><button class="b" id="plCreate">Создать</button></div>
+</div>
+<div id="plList"></div>
+<div class="card hide" id="plView"></div>
+</section>
+
+<section id="imp" class="hide">
+<div class="card">
+<p style="margin-top:0"><b>Перенос плейлиста списком</b></p>
+<p class="dim">Загрузи CSV или JSON со списком треков (например, из Exportify для Spotify или любого экспортёра). Нужны колонки с названием и исполнителем. Приложение найдёт эти треки среди твоих файлов; чего не хватает, можно поискать в Jamendo.</p>
+<label class="b">Выбрать CSV / JSON<input id="impFile" type="file" accept=".csv,.json,.txt" hidden></label>
+<p class="dim" style="margin-bottom:4px">Или вставь список строками «Исполнитель - Название»:</p>
+<textarea id="impText" rows="5" placeholder="Daft Punk - Digital Love"></textarea>
+<div style="margin-top:8px"><button class="b" id="impGo">Сопоставить</button></div>
+</div>
+<div class="card hide" id="impRes"></div>
+</section>
+
+<section id="jam" class="hide">
+<div class="card">
+<p class="dim" style="margin-top:0">Бесплатные треки с лицензиями Creative Commons. Нужен свой Client ID (Настройки).</p>
+<input type="search" id="jq" placeholder="Исполнитель или название">
+<div style="margin-top:8px"><button class="b" id="jgo">Искать</button></div>
+</div>
+<div class="card hide" id="jres"></div>
+</section>
+
+<section id="set" class="hide">
+<div class="card">
+<p style="margin-top:0"><b>Jamendo Client ID</b></p>
+<p class="dim">Бесплатно получить на devportal.jamendo.com (создай приложение).</p>
+<input type="text" id="jid" placeholder="например, 1a2b3c4d">
+<div style="margin-top:8px"><button class="b" id="jsave">Сохранить</button></div>
+</div>
+<div class="card">
+<button class="g" id="wipe">Удалить всю библиотеку</button>
+</div>
+</section>
+</main>
+
+<div id="player">
+<div class="now" id="now">Ничего не играет</div>
+<input type="range" id="seek" min="0" max="1000" value="0">
+<div class="ctrl">
+<button id="shuf" title="Перемешать">⇄</button>
+<button id="prev">⏮</button>
+<button id="play">▶</button>
+<button id="next">⏭</button>
+<button id="rep" title="Повтор">↻</button>
+</div>
+</div>
+<audio id="au" preload="metadata"></audio>
+
+<script>
+/* ---------- IndexedDB ---------- */
+const DB = {
+  db: null,
+  open() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('mymusic', 1);
+      r.onupgradeneeded = () => {
+        const d = r.result;
+        d.createObjectStore('tracks', { keyPath: 'id', autoIncrement: true });
+        d.createObjectStore('playlists', { keyPath: 'id', autoIncrement: true });
+      };
+      r.onsuccess = () => { this.db = r.result; res(); };
+      r.onerror = () => rej(r.error);
+    });
+  },
+  tx(store, mode, fn) {
+    return new Promise((res, rej) => {
+      const t = this.db.transaction(store, mode);
+      const s = t.objectStore(store);
+      const out = fn(s);
+      t.oncomplete = () => res(out && out.result !== undefined ? out.result : undefined);
+      t.onerror = () => rej(t.error);
+    });
+  },
+  all(store) { return this.tx(store, 'readonly', s => s.getAll()); },
+  put(store, v) { return this.tx(store, 'readwrite', s => s.put(v)); },
+  del(store, id) { return this.tx(store, 'readwrite', s => s.delete(id)); },
+  clear(store) { return this.tx(store, 'readwrite', s => s.clear()); }
+};
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const norm = s => String(s || '').toLowerCase()
+  .replace(/\(.*?\)|\[.*?\]/g, ' ').replace(/feat\.?.*$/i, ' ')
+  .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+let tracks = [], playlists = [];
+let queue = [], qi = -1, shuffle = false, repeat = false;
+let curUrl = null;
+
+async function reload() {
+  tracks = await DB.all('tracks');
+  playlists = await DB.all('playlists');
+  renderLib(); renderPl(); showStorage();
+}
+
+async function showStorage() {
+  if (navigator.storage && navigator.storage.estimate) {
+    const e = await navigator.storage.estimate();
+    $('storage').textContent = ` ${tracks.length} треков, занято ${(e.usage / 1048576).toFixed(0)} МБ`;
+  }
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+}
+
+/* ---------- tabs ---------- */
+$('nav').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('main section').forEach(s => s.classList.toggle('hide', s.id !== b.dataset.tab));
+};
+
+/* ---------- adding files ---------- */
+function parseName(fn) {
+  const base = fn.replace(/\.[^.]+$/, '').replace(/_/g, ' ');
+  const m = base.split(/\s[-–—]\s/);
+  if (m.length >= 2) return { artist: m[0].trim(), title: m.slice(1).join(' - ').trim() };
+  return { artist: 'Неизвестный', title: base.trim() };
+}
+
+$('addFiles').onchange = async e => {
+  for (const f of e.target.files) {
+    const { artist, title } = parseName(f.name);
+    await DB.put('tracks', { title, artist, blob: f, type: f.type, source: 'file', added: Date.now() });
+  }
+  e.target.value = '';
+  reload();
+};
+
+/* ---------- library ---------- */
+function rowHtml(t, i, extra = '') {
+  return `<div class="row ${queue[qi] && queue[qi].id === t.id ? 'cur' : ''}" data-id="${t.id}">
+    <div class="t" data-play="${i}"><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></div>${extra}</div>`;
+}
+
+function renderLib() {
+  const q = norm($('q').value);
+  const list = tracks.filter(t => !q || norm(t.title + ' ' + t.artist).includes(q));
+  $('libList').innerHTML = list.length
+    ? list.map((t, i) => rowHtml(t, i, `<button class="g" data-del="${t.id}">✕</button><button class="g" data-addpl="${t.id}">＋</button>`)).join('')
+    : '<span class="dim">Пока пусто. Добавь файлы или скачай треки из Jamendo.</span>';
+  $('libList')._list = list;
+}
+$('q').oninput = renderLib;
+
+$('libList').onclick = async e => {
+  const list = $('libList')._list || [];
+  const p = e.target.closest('[data-play]');
+  if (p) return startQueue(list, +p.dataset.play);
+  const d = e.target.closest('[data-del]');
+  if (d && confirm('Удалить трек?')) { await DB.del('tracks', +d.dataset.del); return reload(); }
+  const a = e.target.closest('[data-addpl]');
+  if (a) addToPlaylistPrompt(+a.dataset.addpl);
+};
+
+async function addToPlaylistPrompt(trackId) {
+  if (!playlists.length) return alert('Сначала создай плейлист во вкладке «Плейлисты».');
+  const names = playlists.map((p, i) => `${i + 1}. ${p.name}`).join('\n');
+  const n = parseInt(prompt('В какой плейлист добавить?\n' + names), 10);
+  const pl = playlists[n - 1]; if (!pl) return;
+  if (!pl.ids.includes(trackId)) pl.ids.push(trackId);
+  await DB.put('playlists', pl); reload();
+}
+
+/* ---------- playlists ---------- */
+$('plCreate').onclick = async () => {
+  const name = $('plName').value.trim(); if (!name) return;
+  await DB.put('playlists', { name, ids: [] });
+  $('plName').value = ''; reload();
+};
+
+function renderPl() {
+  $('plList').innerHTML = playlists.map(p => `
+    <div class="card row" data-pl="${p.id}">
+      <div class="t"><b>${esc(p.name)}</b><span>${p.ids.length} треков</span></div>
+      <button class="g" data-delpl="${p.id}">✕</button>
+    </div>`).join('');
+}
+
+$('plList').onclick = async e => {
+  const dp = e.target.closest('[data-delpl]');
+  if (dp) { if (confirm('Удалить плейлист?')) { await DB.del('playlists', +dp.dataset.delpl); $('plView').classList.add('hide'); reload(); } return; }
+  const r = e.target.closest('[data-pl]'); if (!r) return;
+  openPlaylist(+r.dataset.pl);
+};
+
+function openPlaylist(id) {
+  const pl = playlists.find(p => p.id === id); if (!pl) return;
+  const list = pl.ids.map(i => tracks.find(t => t.id === i)).filter(Boolean);
+  const v = $('plView'); v.classList.remove('hide'); v._list = list;
+  v.innerHTML = `<p style="margin-top:0"><b>${esc(pl.name)}</b> <button class="g" id="plPlayAll">▶ Играть</button></p>` +
+    (list.length ? list.map((t, i) => rowHtml(t, i, `<button class="g" data-rm="${t.id}">✕</button>`)).join('') : '<span class="dim">Пусто</span>');
+  v.onclick = async e => {
+    if (e.target.id === 'plPlayAll') return list.length && startQueue(list, 0);
+    const p = e.target.closest('[data-play]'); if (p) return startQueue(list, +p.dataset.play);
+    const rm = e.target.closest('[data-rm]');
+    if (rm) { pl.ids = pl.ids.filter(x => x !== +rm.dataset.rm); await DB.put('playlists', pl); await reload(); openPlaylist(id); }
+  };
+}
+
+/* ---------- player ---------- */
+const au = $('au');
+
+function startQueue(list, idx) { queue = list.slice(); qi = idx; playCurrent(); }
+
+function playCurrent() {
+  const t = queue[qi]; if (!t) return;
+  if (curUrl) URL.revokeObjectURL(curUrl);
+  curUrl = URL.createObjectURL(t.blob);
+  au.src = curUrl; au.play().catch(() => {});
+  $('now').textContent = `${t.artist} — ${t.title}`;
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({ title: t.title, artist: t.artist });
+    navigator.mediaSession.setActionHandler('nexttrack', next);
+    navigator.mediaSession.setActionHandler('previoustrack', prev);
+    navigator.mediaSession.setActionHandler('play', () => au.play());
+    navigator.mediaSession.setActionHandler('pause', () => au.pause());
+  }
+  renderLib();
+}
+
+function next() {
+  if (!queue.length) return;
+  qi = shuffle ? Math.floor(Math.random() * queue.length) : (qi + 1) % queue.length;
+  playCurrent();
+}
+function prev() {
+  if (!queue.length) return;
+  if (au.currentTime > 3) { au.currentTime = 0; return; }
+  qi = (qi - 1 + queue.length) % queue.length; playCurrent();
+}
+
+$('play').onclick = () => { if (au.src) au.paused ? au.play() : au.pause(); };
+$('next').onclick = next; $('prev').onclick = prev;
+$('shuf').onclick = e => { shuffle = !shuffle; e.target.classList.toggle('on', shuffle); };
+$('rep').onclick = e => { repeat = !repeat; e.target.classList.toggle('on', repeat); };
+au.onplay = () => $('play').textContent = '⏸';
+au.onpause = () => $('play').textContent = '▶';
+au.onended = () => { if (repeat && queue.length === 1) { au.currentTime = 0; au.play(); } else if (repeat || qi < queue.length - 1 || shuffle) next(); };
+au.ontimeupdate = () => { if (au.duration) $('seek').value = au.currentTime / au.duration * 1000; };
+$('seek').oninput = e => { if (au.duration) au.currentTime = e.target.value / 1000 * au.duration; };
+
+/* ---------- import playlist list ---------- */
+function parseCSV(text) {
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c;
+    } else if (c === '"') q = true;
+    else if (c === ',' || c === ';') { row.push(cur); cur = ''; }
+    else if (c === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+    else if (c !== '\r') cur += c;
+  }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+  return rows;
+}
+
+function extractList(text, fname) {
+  text = text.replace(/^\uFEFF/, '');
+  // JSON
+  if (/\.json$/i.test(fname) || /^\s*[\[{]/.test(text)) {
+    try {
+      let j = JSON.parse(text);
+      if (!Array.isArray(j)) j = j.tracks || j.items || j.songs || [];
+      return j.map(x => {
+        x = x.track || x;
+        const a = x.artist || x.artists || x.artistName || x.Artist;
+        const artist = Array.isArray(a) ? (a[0] && (a[0].name || a[0])) : (a && a.name) || a;
+        const title = x.title || x.name || x.trackName || x.Title || x.track_name;
+        return title ? { artist: String(artist || ''), title: String(title) } : null;
+      }).filter(Boolean);
+    } catch (e) {}
+  }
+  // CSV с заголовком
+  const lines = text.split('\n').filter(l => l.trim());
+  if (lines.length && lines[0].includes(',') || lines[0].includes(';')) {
+    const rows = parseCSV(text);
+    const head = rows[0].map(h => h.toLowerCase().trim());
+    const ti = head.findIndex(h => /^(track name|track|title|name|song|название|трек)$/.test(h));
+    const ai = head.findIndex(h => /^(artist name\(s\)|artist names?|artists?|artist|исполнитель)$/.test(h));
+    if (ti >= 0) {
+      return rows.slice(1).map(r => ({ title: (r[ti] || '').trim(), artist: ((r[ai] || '').split(/[;,]/)[0] || '').trim() })).filter(x => x.title);
+    }
+  }
+  // Строки «Исполнитель - Название»
+  return lines.map(l => {
+    const m = l.split(/\s[-–—]\s/);
+    return m.length >= 2 ? { artist: m[0].trim(), title: m.slice(1).join(' - ').trim() } : { artist: '', title: l.trim() };
+  });
+}
+
+let impList = [];
+$('impFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $('impText').value = await f.text();
+  $('impText')._name = f.name;
+  e.target.value = '';
+};
+
+function findLocal(item) {
+  const nt = norm(item.title), na = norm(item.artist);
+  let best = tracks.find(t => norm(t.title) === nt && (!na || norm(t.artist).includes(na) || na.includes(norm(t.artist))));
+  if (!best) best = tracks.find(t => norm(t.title) === nt);
+  return best;
+}
+
+$('impGo').onclick = () => {
+  impList = extractList($('impText').value, $('impText')._name || '');
+  if (!impList.length) return alert('Не удалось прочитать список.');
+  impList.forEach(x => x.hit = findLocal(x));
+  const found = impList.filter(x => x.hit);
+  const miss = impList.filter(x => !x.hit);
+  const r = $('impRes'); r.classList.remove('hide');
+  r.innerHTML = `<p style="margin-top:0">Найдено в твоей библиотеке: <b class="ok">${found.length}</b> из ${impList.length}</p>
+    <input type="text" id="impPlName" placeholder="Название плейлиста" value="Импорт ${new Date().toLocaleDateString('ru')}">
+    <div style="margin:8px 0"><button class="b" id="impSave">Создать плейлист из найденных</button></div>
+    <p><b>Не найдено (${miss.length})</b></p>` +
+    (miss.map((x, i) => `<div class="row"><div class="t"><b class="bad">${esc(x.title)}</b><span>${esc(x.artist)}</span></div>
+      <button class="g" data-jam="${i}">Jamendo</button></div>`).join('') || '<span class="dim">Всё нашлось</span>');
+  r._miss = miss;
+};
+
+$('impRes').onclick = async e => {
+  if (e.target.id === 'impSave') {
+    const ids = impList.filter(x => x.hit).map(x => x.hit.id);
+    await DB.put('playlists', { name: $('impPlName').value || 'Импорт', ids });
+    await reload(); alert('Плейлист создан.'); return;
+  }
+  const j = e.target.closest('[data-jam]');
+  if (j) {
+    const it = $('impRes')._miss[+j.dataset.jam];
+    document.querySelector('[data-tab=jam]').click();
+    $('jq').value = `${it.artist} ${it.title}`.trim(); jamSearch();
+  }
+};
+
+/* ---------- Jamendo ---------- */
+function jamId() { return localStorage.getItem('jamId') || ''; }
+$('jid').value = jamId();
+$('jsave').onclick = () => { localStorage.setItem('jamId', $('jid').value.trim()); alert('Сохранено'); };
+
+async function jamSearch() {
+  const id = jamId();
+  if (!id) return alert('Сначала укажи Client ID в Настройках.');
+  const q = $('jq').value.trim(); if (!q) return;
+  const box = $('jres'); box.classList.remove('hide'); box.innerHTML = '<span class="dim">Ищу…</span>';
+  try {
+    const url = `https://api.jamendo.com/v3.0/tracks/?client_id=${encodeURIComponent(id)}&format=json&limit=20&search=${encodeURIComponent(q)}&audiodownload_allowed=true&include=licenses`;
+    const r = await fetch(url); const j = await r.json();
+    const res = j.results || [];
+    box._res = res;
+    box.innerHTML = res.length ? res.map((t, i) => `<div class="row"><div class="t"><b>${esc(t.name)}</b><span>${esc(t.artist_name)}</span></div>
+      <button class="g" data-dl="${i}">⬇ Скачать</button></div>`).join('') : '<span class="dim">Ничего не найдено</span>';
+  } catch (err) { box.innerHTML = '<span class="bad">Ошибка сети или неверный Client ID</span>'; }
+}
+$('jgo').onclick = jamSearch;
+$('jq').onkeydown = e => { if (e.key === 'Enter') jamSearch(); };
+
+$('jres').onclick = async e => {
+  const b = e.target.closest('[data-dl]'); if (!b) return;
+  const t = $('jres')._res[+b.dataset.dl];
+  b.textContent = '…'; b.disabled = true;
+  try {
+    const r = await fetch(t.audiodownload || t.audio);
+    const blob = await r.blob();
+    await DB.put('tracks', { title: t.name, artist: t.artist_name, blob, type: blob.type || 'audio/mpeg', source: 'jamendo', license: t.license_ccurl || '', added: Date.now() });
+    b.textContent = '✓ Сохранено'; reload();
+  } catch (err) { b.textContent = 'Ошибка'; b.disabled = false; }
+};
+
+/* ---------- settings ---------- */
+$('wipe').onclick = async () => {
+  if (!confirm('Удалить все треки и плейлисты?')) return;
+  await DB.clear('tracks'); await DB.clear('playlists'); reload();
+};
+
+/* ---------- start ---------- */
+DB.open().then(reload);
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
